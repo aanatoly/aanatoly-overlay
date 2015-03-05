@@ -1,0 +1,108 @@
+diff -uNr Thunar-1.6.3/thunar/thunar-icon-factory.c Thunar-1.6.3-mod/thunar/thunar-icon-factory.c
+--- Thunar-1.6.3/thunar/thunar-icon-factory.c	2013-05-05 19:37:23.000000000 +0300
++++ Thunar-1.6.3-mod/thunar/thunar-icon-factory.c	2015-03-02 10:47:25.717857386 +0200
+@@ -88,6 +88,10 @@
+                                                              gint                      size);
+ 
+ 
++static GdkPixbuf *thunar_icon_factory_load_dir_icon(ThunarFile *file,
++    gint icon_size,
++    GdkPixbuf *icon);
++ 
+ 
+ struct _ThunarIconFactoryClass
+ {
+@@ -131,7 +135,6 @@
+ ThunarIconStore;
+ 
+ 
+-
+ static GQuark thunar_icon_factory_quark = 0;
+ static GQuark thunar_icon_factory_store_quark = 0;
+ 
+@@ -603,6 +606,67 @@
+ }
+ 
+ 
++ /**
++ * thunar_icon_factory_load_dir_icon:
++ * @file       : a #ThunarFile.
++ * @icon_size  : the desired icon size.
++ * @icon       : icon to use as background
++ *
++ * Creates directory thumbnail icon by combining @icon with image in
++ * @file/.DirThumb file.
++ *
++ * Call g_object_unref() on the returned pixbuf when you are
++ * done with it.
++ *
++ * Return value: the pixbuf for the direcory thumbnail icon or NULL
++ **/
++static GdkPixbuf *
++thunar_icon_factory_load_dir_icon(ThunarFile         *file,
++                                  gint                icon_size,
++                                  GdkPixbuf *icon)
++{
++  char *thumb;
++  GdkPixbuf *dt, *di = NULL;
++  char *path;
++  int size, w, h;
++  gdouble r1;
++
++  if (icon_size <= 24)
++    return NULL;
++
++  path = g_file_get_path (thunar_file_get_file (file)); 
++  thumb = g_strdup_printf("%s%s.DirThumb", path, G_DIR_SEPARATOR_S);
++  dt = gdk_pixbuf_new_from_file (thumb, NULL);
++  g_free(thumb);
++  g_free(path);
++  if (!dt)
++    return NULL;
++
++  di = gdk_pixbuf_copy(icon);
++  if (!di)
++    return NULL;
++  size = icon_size-10;
++  w = gdk_pixbuf_get_width(dt);
++  h = gdk_pixbuf_get_height(dt);
++  if (w > h)
++    {
++      r1 = (gdouble) size / w;
++      w = size;
++      h = h * r1;
++    }
++  else
++    {
++      r1 = (gdouble) size / h;
++      h = size;
++      w = w * r1;
++    }
++  gdk_pixbuf_composite(dt, di, 10, 0, w, h, 10, 0, r1, r1,
++                       GDK_INTERP_HYPER, 255);
++  g_object_unref(dt);
++  return di;
++}
++
++ 
+ 
+ /**
+  * thunar_icon_factory_get_default:
+@@ -890,6 +954,17 @@
+     {
+       icon_name = thunar_file_get_icon_name (file, icon_state, factory->icon_theme);
+       icon = thunar_icon_factory_load_icon (factory, icon_name, icon_size, TRUE);
++      if (thunar_file_is_directory(file))
++      {
++          GdkPixbuf *eicon = thunar_icon_factory_load_dir_icon(file, icon_size,
++              icon);
++          if (eicon != NULL)
++          {
++              g_object_unref (G_OBJECT (icon));
++              icon = eicon;
++          }
++      }
++
+     }
+ 
+   if (G_LIKELY (icon != NULL))
